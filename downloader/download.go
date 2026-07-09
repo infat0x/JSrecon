@@ -127,6 +127,20 @@ func DownloadJS(urls []string, dlDir string, threads int, pb *pterm.ProgressbarP
 		Timeout:   10 * time.Second,
 	}
 
+	insecureTransport := &http.Transport{
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:        10000,
+		MaxIdleConnsPerHost: 1000,
+		MaxConnsPerHost:     0,
+		IdleConnTimeout:     10 * time.Second,
+		DisableKeepAlives:   false,
+		ForceAttemptHTTP2:   true,
+	}
+	insecureClient := &http.Client{
+		Transport: insecureTransport,
+		Timeout:   10 * time.Second,
+	}
+
 	urlChan := make(chan string, len(urls))
 	for _, u := range urls {
 		urlChan <- u
@@ -148,7 +162,7 @@ func DownloadJS(urls []string, dlDir string, threads int, pb *pterm.ProgressbarP
 			for urlStr := range urlChan {
 				finalPath, err := attemptDownload(client, urlStr, dlDir, &seenHashes)
 
-				// Protocol Fallback: if primary attempt failed, try alternate protocol
+				// Protocol Fallback: if primary attempt failed, try alternate protocol or insecure client
 				if err != nil || finalPath == "" {
 					fallbackURL := ""
 					if strings.HasPrefix(urlStr, "https://") {
@@ -156,14 +170,32 @@ func DownloadJS(urls []string, dlDir string, threads int, pb *pterm.ProgressbarP
 					} else if strings.HasPrefix(urlStr, "http://") {
 						fallbackURL = "https://" + strings.TrimPrefix(urlStr, "http://")
 					}
+					
+					var fallbackPath string
+					var fallbackErr error
+					
 					if fallbackURL != "" {
-						core.Debug("Fallback attempt: %s -> %s", urlStr, fallbackURL)
-						fallbackPath, fallbackErr := attemptDownload(client, fallbackURL, dlDir, &seenHashes)
-						if fallbackErr == nil && fallbackPath != "" {
-							finalPath = fallbackPath
-							// Store with original URL as key
-						} else {
-							core.Debug("Both protocols failed for %s", urlStr)
+						core.Debug("Fallback attempt (Alternate Protocol): %s -> %s", urlStr, fallbackURL)
+						fallbackPath, fallbackErr = attemptDownload(client, fallbackURL, dlDir, &seenHashes)
+					}
+					
+					if fallbackErr == nil && fallbackPath != "" {
+						finalPath = fallbackPath
+					} else {
+						// Auto-Insecure Fallback for original URL
+						core.Debug("Fallback attempt (Insecure TLS): %s", urlStr)
+						insecurePath, insecureErr := attemptDownload(insecureClient, urlStr, dlDir, &seenHashes)
+						if insecureErr == nil && insecurePath != "" {
+							finalPath = insecurePath
+						} else if fallbackURL != "" {
+							// Auto-Insecure Fallback for alternate protocol
+							core.Debug("Fallback attempt (Alternate Protocol + Insecure TLS): %s", fallbackURL)
+							insecureFallbackPath, insecureFallbackErr := attemptDownload(insecureClient, fallbackURL, dlDir, &seenHashes)
+							if insecureFallbackErr == nil && insecureFallbackPath != "" {
+								finalPath = insecureFallbackPath
+							} else {
+								core.Debug("All fallbacks failed for %s", urlStr)
+							}
 						}
 					}
 				}
