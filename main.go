@@ -295,7 +295,7 @@ func main() {
 		}
 
 		// 1. Live Hosts
-		core.PrintSection(1, 5, "Live Host Detection")
+		core.PrintSection(1, 6, "Live Host Detection")
 		liveFile := filepath.Join(dirs["live"], "live.txt")
 		if *skipLiveCheck {
 			if data, err := os.ReadFile(liveFile); err == nil {
@@ -326,7 +326,7 @@ func main() {
 		core.PrintSuccess(fmt.Sprintf("Live Host Detection complete [%d hosts]", len(live)))
 
 		// 2. URL Collection
-		core.PrintSection(2, 5, "URL Collection (Passive+Active)")
+		core.PrintSection(2, 6, "URL Collection (Passive+Active)")
 		urlsFile := filepath.Join(dirs["urls"], "all_urls.txt")
 		var allUrls []string
 
@@ -390,7 +390,7 @@ func main() {
 		core.PrintSuccess(fmt.Sprintf("URL Collection complete [%d URLs]", len(allUrls)))
 
 		// 3. JS Extraction & Filter
-		core.PrintSection(3, 5, "JavaScript Extraction")
+		core.PrintSection(3, 6, "JavaScript Extraction (Static)")
 		
 		var jsSet []string
 
@@ -434,6 +434,24 @@ func main() {
 		// Clean up formatting
 		jsSet = core.Dedup(jsSet)
 
+		// 4. Dynamic DOM Extraction (Headless)
+		core.PrintSection(4, 6, "Dynamic DOM Extraction (Headless)")
+		headlessPb := core.StartSpinner("Running Fast Headless Engine...")
+		headlessUrls := collector.RunKatanaHeadlessFast(live)
+		if headlessPb != nil {
+			headlessPb.Success(fmt.Sprintf("Headless Engine finished (%d URLs)", len(headlessUrls)))
+		}
+
+		var headlessJs []string
+		for _, u := range headlessUrls {
+			lu := strings.ToLower(u)
+			if strings.HasSuffix(lu, ".js") || strings.Contains(lu, ".js?") || strings.Contains(lu, ".js#") {
+				headlessJs = append(headlessJs, u)
+			}
+		}
+		jsSet = append(jsSet, headlessJs...)
+		jsSet = core.Dedup(jsSet)
+
 		// Discover live source maps
 		sourceMaps := collector.CheckSourceMaps(jsSet)
 		jsSet = append(jsSet, sourceMaps...)
@@ -459,8 +477,8 @@ func main() {
 	}
 	core.PrintSuccess(fmt.Sprintf("JS Extraction complete [%d all / %d custom]", len(jsAll), len(jsCustom)))
 
-	// 4. Download JS
-	core.PrintSection(4, 5, "Downloading JavaScript Files")
+	// 5. Download JS
+	core.PrintSection(5, 6, "Downloading JavaScript Files")
 	dlPb := core.StartProgressBar(len(targets), "Downloading")
 
 	dlMap := downloader.DownloadJS(targets, dirs["dl"], *threads, dlPb)
@@ -476,7 +494,7 @@ func main() {
 	scanner.CheckGitExposure(live, dirs["git"], *threads)
 
 	core.PrintScanEngineStart(15)
-	core.PrintSection(5, 5, "Secret Scanning")
+	core.PrintSection(6, 6, "Secret Scanning")
 
 	var allFindings []core.Finding
 	var mu sync.Mutex

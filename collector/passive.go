@@ -77,3 +77,17 @@ func RunHakrawler(urls []string) []string {
 	}
 	return runCmdLinesStdin(ctx, urls, "hakrawler", args...)
 }
+
+func RunKatanaHeadlessFast(hosts []string) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	// -hl: headless mode
+	// -jc: js crawl
+	// -d 1: depth 1, only the target page
+	// -c 20: concurrency 20
+	args := []string{"-hl", "-jc", "-d", "1", "-c", "20", "-silent", "-nc", "-ef", "css,png,jpg,jpeg,gif,ico,svg,ttf,woff,woff2,eot,pdf,mp4,mp3,zip"}
+	if core.GlobalConfig.Insecure {
+		args = append(args, "-insecure")
+	}
+	return runCmdLinesStdin(ctx, hosts, "katana", args...)
+}
