@@ -30,3 +30,4 @@ Contact: `infat@proton.me`
 <div align="center">
   <i>Thank you to everyone who supports open-source security! 🏴‍☠️</i>
 </div>
+
